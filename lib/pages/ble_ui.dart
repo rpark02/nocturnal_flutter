@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
 
 class BLEConnectionPage extends StatefulWidget {
   const BLEConnectionPage({super.key});
@@ -9,30 +9,6 @@ class BLEConnectionPage extends StatefulWidget {
 }
 
 class _BLEConnectionPage extends State<BLEConnectionPage> {
-
-  void testConnection() async {
-    try {
-      BluetoothAdapterState adapterState = await FlutterBluePlus.adapterState.first;
-      if (adapterState != BluetoothAdapterState.on) {
-        print('Bluetooth is not enabled.');
-        return;
-      }
-
-      List<BluetoothDevice> connectedDevices = FlutterBluePlus.connectedDevices;
-
-      if (connectedDevices.isNotEmpty) {
-        BluetoothDevice device = connectedDevices.first;
-        print('Connected to device: ${device.platformName}');
-      } else {
-        print('No devices are currently connected.');
-      }
-    } catch (e) {
-      print('Error checking conection: $e');
-    }
-  }
-
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,7 +33,9 @@ class _BLEConnectionPage extends State<BLEConnectionPage> {
             ),
             SizedBox(height: 40),
             FilledButton(
-              onPressed: testConnection,
+              onPressed: () {
+                print('Test Connection pressed');
+              },
               child: Text(
                 'Test Connection',
                 style: TextStyle(

@@ -9,7 +9,6 @@ class BLEConnectionPage extends StatefulWidget {
 }
 
 class _BLEConnectionPage extends State<BLEConnectionPage> {
-
   void testConnection() async {
     try {
       BluetoothAdapterState adapterState = await FlutterBluePlus.adapterState.first;
@@ -30,8 +29,6 @@ class _BLEConnectionPage extends State<BLEConnectionPage> {
       print('Error checking conection: $e');
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {

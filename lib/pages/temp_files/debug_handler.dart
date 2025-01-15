@@ -2,9 +2,9 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:typed_data'; // handles binary data
 import 'dart:async'; // Stream and StreamSubscription
 
-
 abstract class BLEHandlerDelegate {
   void bleStatusDidUpdate(String status);
+  void bleDevicesDidUpdate(List<BluetoothDevice> devices); // Add this delegate
 }
 
 class BLEHandler {
@@ -14,16 +14,13 @@ class BLEHandler {
   bool isConnected = false;
 
   BLEHandlerDelegate? delegate;
-  // BatchFileHandler batchManager = BatchFileHandler();
 
-  // Device services
   static const String NAME = "Nocturnal";
   static const String UUID_PROX_SERVICE = "19B10000-E8F2-537E-4F6C-D104768A1214";
   static const String UUID_IMU_SERVICE = "19B10001-E8F2-537E-4F6C-D104768A1214";
   static const String UUID_STATUS_SERVICE = "19B10002-E8F2-537E-4F6C-D104768A1214";
   static const String UUID_WRITE_SERVICE = "19B10003-E8F2-537E-4F6C-D104768A1214";
   
-  // Device characteristics
   static const String UUID_PROX_UUID = "19B10000-E8F2-537E-4F6C-D104768A1215";
   static const String UUID_CURR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1215";
   static const String UUID_IMU_UUID = "19B10002-E8F2-537E-4F6C-D104768A1215";
@@ -33,11 +30,9 @@ class BLEHandler {
 
   List<int> writeArr = [65, 0, 0, 0];
 
-  // Subscription management
   StreamSubscription<List<ScanResult>>? scanSubscription;
   StreamSubscription<BluetoothAdapterState>? adapterStateSubscription;
   StreamSubscription<List<int>>? characteristicSubscription;
-
 
   // Device initialization and scanning
   Future<void> initDevice() async {
@@ -45,43 +40,55 @@ class BLEHandler {
 
     try {
       // Check bluetooth adapter state
-      await FlutterBluePlus.adapterState.first;
+      final state = await FlutterBluePlus.adapterState.first;
+      print('Initial Bluetooth adapter state: $state');
+
+      if (state == BluetoothAdapterState.on) {
+        print("Bluetooth is on. Starting scan.");
+        FlutterBluePlus.startScan();
+      } else {
+        delegate?.bleStatusDidUpdate("Bluetooth is ${state.toString()}");
+        print("Bluetooth state is off. State: $state");
+      }
 
       adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) {
+        print("Bluetooth adapter state changed: $state");
         if (state == BluetoothAdapterState.on) {
+          print("Bluetooth turned on, starting scan.");
           FlutterBluePlus.startScan();
         } else {
           delegate?.bleStatusDidUpdate("Bluetooth is ${state.toString()}");
+          print("Bluetooth state changed to: $state");
         }
       });
 
       if (await FlutterBluePlus.isSupported) {
-        FlutterBluePlus.startScan();
+        print("Bluetooth is supported.");
       } else {
         delegate?.bleStatusDidUpdate("Bluetooth not supported");
+        print("Bluetooth is not supported on this device.");
       }
-
     } catch (e) {
       print('Error initializing Bluetooth: $e');
       delegate?.bleStatusDidUpdate("Error initializing Bluetooth");
     }
   }
 
+
   // Device connection and searching for services
   Future<void> startScan() async {
     try {
-      // Stop any existing scan
       await FlutterBluePlus.stopScan();
-      
-      // Start scanning
       scanSubscription?.cancel();
+
+      List<BluetoothDevice> foundDevices = [];
       scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         for (ScanResult r in results) {
           if (r.device.platformName.contains(NAME)) {
-            _peripheral = r.device;
-            connectToDevice(r.device);
+            foundDevices.add(r.device);
           }
         }
+        delegate?.bleDevicesDidUpdate(foundDevices); // Send found devices to delegate
       });
 
       await FlutterBluePlus.startScan(
@@ -94,49 +101,30 @@ class BLEHandler {
     }
   }
 
-  // Device connection
   Future<void> connectToDevice(BluetoothDevice device) async {
     try {
-      // Cancel scanning
       await FlutterBluePlus.stopScan();
       scanSubscription?.cancel();
 
-      // Connect to device
-      await device.connect(
-        timeout: const Duration(seconds: 4),
-        autoConnect: false,
-      );
-      
+      await device.connect(timeout: const Duration(seconds: 4), autoConnect: false);
       delegate?.bleStatusDidUpdate("Connected to ${device.platformName}");
-      
-      // Discover services
+
       List<BluetoothService> services = await device.discoverServices();
       for (BluetoothService service in services) {
         for (BluetoothCharacteristic characteristic in service.characteristics) {
-          // Check for the read property
           if (characteristic.properties.read) {
-            print("${characteristic.uuid}: properties contains read");
             await characteristic.read();
           }
 
-          // Check for the write property
           if (characteristic.uuid.toString() == UUID_WRITE) {
             if (characteristic.properties.write) {
-              print("${characteristic.uuid}: properties contains write");
               sendCharacteristic = characteristic;
               loadedService = true;
-            } else {
-              print("${characteristic.uuid}: found matching UUID but characteristic is not writable");
-            } 
+            }
           }
-          
-          // Check for and set up notifications
+
           if (characteristic.properties.notify) {
-            print("${characteristic.uuid}: properties contains notify");
             await characteristic.setNotifyValue(true);
-            
-            // Cancel any existing subscription
-            characteristicSubscription?.cancel();
             characteristicSubscription = characteristic.lastValueStream.listen(
               (value) => _handleCharacteristicValue(characteristic, value),
               onError: (error) => print('Characteristic notification error: $error'),
@@ -144,16 +132,13 @@ class BLEHandler {
           }
         }
       }
-      
-      isConnected = true;
 
-      // Listen for disconnection
+      isConnected = true;
       device.connectionState.listen((BluetoothConnectionState state) {
         if (state == BluetoothConnectionState.disconnected) {
           handleDisconnect();
         }
       });
-      
     } catch (e) {
       print('Failed to connect: $e');
       delegate?.bleStatusDidUpdate("Failed to connect");
@@ -161,26 +146,19 @@ class BLEHandler {
     }
   }
 
-  // Manage disconnection to device
   void handleDisconnect() {
     isConnected = false;
     loadedService = false;
     delegate?.bleStatusDidUpdate("Disconnected from device");
-    
-    // Clean up subscriptions
+
     characteristicSubscription?.cancel();
-    
-    // Attempt to reconnect
     initDevice();
   }
 
-  // Process incoming data using batch manager
   void _handleCharacteristicValue(BluetoothCharacteristic characteristic, List<int> value) {
     String timestamp = DateTime.now().toIso8601String();
-    // batchManager.processData(Uint8List.fromList(value), characteristic.uuid.toString(), timestamp);
   }
 
-  // Update settings and get data
   Future<void> updateSettings() async {
     if (loadedService && isConnected && sendCharacteristic != null) {
       try {
@@ -192,7 +170,6 @@ class BLEHandler {
     }
   }
 
-  // STIMULATION CONTROL METHODS
   Future<void> turnOnStim({required bool isActive, required int strength, required int freq}) async {
     if (isActive) {
       writeArr = [strength, 66, 66, freq];
@@ -201,60 +178,33 @@ class BLEHandler {
       writeArr = [65, 0, 0, 0];
       await updateSettings();
     }
-    createStartMarker();
   }
 
   Future<void> turnOffStim() async {
     writeArr = [65, 0, 0, 0];
     await updateSettings();
-    createStopMarker();
   }
 
   Future<void> modifyStim({required bool isActive, required int strength, required int freq}) async {
     writeArr = [65, 0, 0, 0];
     await updateSettings();
-    
+
     if (!isActive) return;
-    
+
     writeArr = [strength, 66, 66, freq];
     await updateSettings();
-    
-    createModifyMarker();
   }
 
-  // MARKER CREATION
-  void createStartMarker() {
-    String dataStr = writeArr.join(',');
-    String timestamp = DateTime.now().toIso8601String();
-    // batchManager.processDataMarker(dataStr, "START", timestamp);
-  }
-
-  void createStopMarker() {
-    String dataStr = writeArr.join(',');
-    String timestamp = DateTime.now().toIso8601String();
-    // batchManager.processDataMarker(dataStr, "STOP", timestamp);
-  }
-
-  void createModifyMarker() {
-    String dataStr = writeArr.join(',');
-    String timestamp = DateTime.now().toIso8601String();
-    // batchManager.processDataMarker(dataStr, "CHANGE", timestamp);
-  }
-
-  // CLEANUP METHOD for when disposing of BLE Handler
   Future<void> dispose() async {
     try {
-      // Cancel all subscriptions
       scanSubscription?.cancel();
       adapterStateSubscription?.cancel();
       characteristicSubscription?.cancel();
-      
-      // Disconnect from peripheral if connected
+
       if (_peripheral != null && isConnected) {
         await _peripheral!.disconnect();
       }
-      
-      // Stop scanning if still scanning
+
       await FlutterBluePlus.stopScan();
     } catch (e) {
       print('Error during disposal: $e');

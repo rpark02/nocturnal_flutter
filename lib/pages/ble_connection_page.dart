@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../ble_handler.dart';
+
 
 class BLEConnectionPage extends StatefulWidget {
   const BLEConnectionPage({super.key});
@@ -7,7 +9,24 @@ class BLEConnectionPage extends StatefulWidget {
   State<BLEConnectionPage> createState() => _BLEConnectionPage();
 }
 
-class _BLEConnectionPage extends State<BLEConnectionPage> {
+class _BLEConnectionPage extends State<BLEConnectionPage> implements BLEHandlerDelegate {
+  late BLEHandler bleHandler;
+
+  @override
+  void initState() {
+    super.initState();
+    bleHandler = BLEHandler()..delegate = this;
+    bleHandler.initDevice();
+  }
+
+  @override
+  void bleStatusDidUpdate(String status) {
+    print('BLE Status: $status');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(status)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -22,37 +41,27 @@ class _BLEConnectionPage extends State<BLEConnectionPage> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
-                'Bluetooth Status: $bleStatus',
+                'Click the button below to make sure your sleep mask is connected to your device. If connected, the mask should flash white lights.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 20, // Adjusted font size for better layout
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            SizedBox(height: 40),
             FilledButton(
               onPressed: () {
-                print('Test Connection pressed');
+                bleHandler.initDevice();
               },
               child: Text(
-                isScanning ? 'Scanning...' : 'Start Scan',
+                'Test Connection',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 16, // Adjusted font size for better layout
                 ),
               ),
             ),
-            SizedBox(height: 20),
-            FilledButton(
-              onPressed: updateSettings,
-              child: Text(
-                'Update Settings',
-                style: TextStyle(
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            SizedBox(height: 20),
+            SizedBox(height: 30),
             FilledButton(
               onPressed: () {
                 print('I\'m Connected!');
@@ -60,7 +69,7 @@ class _BLEConnectionPage extends State<BLEConnectionPage> {
               child: Text(
                 'I\'m Connected!',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 16, // Adjusted font size for better layout
                 ),
               ),
             ),

@@ -17,7 +17,7 @@ class BLEHandler {
   // BatchFileHandler batchManager = BatchFileHandler();
 
   // Device services
-  static const String NAME = "Nocturnal";
+  static const String NAME = "Arduino";
   static const String UUID_PROX_SERVICE = "19B10000-E8F2-537E-4F6C-D104768A1214";
   static const String UUID_IMU_SERVICE = "19B10001-E8F2-537E-4F6C-D104768A1214";
   static const String UUID_STATUS_SERVICE = "19B10002-E8F2-537E-4F6C-D104768A1214";
@@ -44,19 +44,24 @@ class BLEHandler {
     print("Initiating Bluetooth");
 
     try {
+      print('testing try statement');
       // Check bluetooth adapter state
       await FlutterBluePlus.adapterState.first;
 
-      adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) {
+      adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) async {
+        print('adapterState');
         if (state == BluetoothAdapterState.on) {
-          FlutterBluePlus.startScan();
+          print('start');
+          await startScan();
+          print('test');
         } else {
           delegate?.bleStatusDidUpdate("Bluetooth is ${state.toString()}");
         }
       });
 
       if (await FlutterBluePlus.isSupported) {
-        FlutterBluePlus.startScan();
+        print('here');
+        await startScan();
       } else {
         delegate?.bleStatusDidUpdate("Bluetooth not supported");
       }
@@ -69,15 +74,18 @@ class BLEHandler {
 
   // Device connection and searching for services
   Future<void> startScan() async {
+    print('Entering startScan function');
     try {
       // Stop any existing scan
       await FlutterBluePlus.stopScan();
       
+      print('before scan sub');
       // Start scanning
       scanSubscription?.cancel();
       scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         for (ScanResult r in results) {
           if (r.device.platformName.contains(NAME)) {
+            print('found device');
             _peripheral = r.device;
             connectToDevice(r.device);
           }
@@ -176,6 +184,7 @@ class BLEHandler {
 
   // Process incoming data using batch manager
   void _handleCharacteristicValue(BluetoothCharacteristic characteristic, List<int> value) {
+    print('Characteristic: $characteristic');
     String timestamp = DateTime.now().toIso8601String();
     // batchManager.processData(Uint8List.fromList(value), characteristic.uuid.toString(), timestamp);
   }
